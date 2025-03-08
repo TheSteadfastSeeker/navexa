@@ -1,0 +1,286 @@
+@startuml "Maritime Predictive Maintenance System"
+
+' Color scheme for better readability
+!define CoreEntity #E0F2F1
+!define OperationalData #E3F2FD
+!define AnalyticalModels #F3E5F5
+!define OperationalManagement #FFF8E1
+
+' Core Entities
+entity "Vessel" as vessel <<CoreEntity>> {
+  *vessel_id : number <<PK>>
+  name : string
+  type : string
+  build_year : number
+  classification : string
+  dimensions : string
+  gross_tonnage : number
+  fleet_id : number <<FK>>
+}
+
+entity "Equipment" as equipment <<CoreEntity>> {
+  *equipment_id : number <<PK>>
+  vessel_id : number <<FK>>
+  type : string
+  manufacturer : string
+  model : string
+  installation_date : date
+  specifications : text
+  location_on_vessel : string
+}
+
+entity "Component" as component <<CoreEntity>> {
+  *component_id : number <<PK>>
+  equipment_id : number <<FK>>
+  name : string
+  type : string
+  manufacturer : string
+  serial_number : string
+  installation_date : date
+  expected_lifetime : number
+}
+
+entity "Sensor" as sensor <<CoreEntity>> {
+  *sensor_id : number <<PK>>
+  equipment_id : number <<FK>>
+  type : string
+  location : string
+  measurement_unit : string
+  calibration_date : date
+  accuracy_range : string
+  sampling_frequency : number
+}
+
+entity "User" as user <<CoreEntity>> {
+  *user_id : number <<PK>>
+  organization_id : number <<FK>>
+  name : string
+  role : string
+  permissions : string
+  contact_info : string
+  authentication_details : string
+}
+
+entity "Organization" as organization <<CoreEntity>> {
+  *organization_id : number <<PK>>
+  name : string
+  type : string
+  contact_info : string
+  subscription_level : string
+}
+
+entity "Fleet" as fleet <<CoreEntity>> {
+  *fleet_id : number <<PK>>
+  organization_id : number <<FK>>
+  name : string
+  type : string
+  description : string
+}
+
+' Operational Data
+entity "SensorReading" as sensor_reading <<OperationalData>> {
+  *reading_id : number <<PK>>
+  sensor_id : number <<FK>>
+  timestamp : datetime
+  value : number
+  quality_indicator : string
+  collection_method : string
+}
+
+entity "OperationalState" as operational_state <<OperationalData>> {
+  *state_id : number <<PK>>
+  equipment_id : number <<FK>>
+  timestamp : datetime
+  operating_mode : string
+  load_percentage : number
+  environmental_conditions : string
+}
+
+entity "Voyage" as voyage <<OperationalData>> {
+  *voyage_id : number <<PK>>
+  vessel_id : number <<FK>>
+  start_date : date
+  end_date : date
+  route : string
+  cargo_type : string
+  operating_conditions : string
+  weather_data : string
+}
+
+entity "MaintenanceRecord" as maintenance_record <<OperationalData>> {
+  *record_id : number <<PK>>
+  equipment_id : number <<FK>>
+  component_id : number <<FK>>
+  maintenance_task_id : number <<FK>>
+  date_time : datetime
+  type : string
+  description : text
+  parts_replaced : string
+  labor_hours : number
+  cost : number
+  user_id : number <<FK>>
+}
+
+entity "FailureEvent" as failure_event <<OperationalData>> {
+  *event_id : number <<PK>>
+  equipment_id : number <<FK>>
+  component_id : number <<FK>>
+  date_time : datetime
+  failure_type : string
+  severity : string
+  impact : string
+  resolution : text
+}
+
+' Analytical Models
+entity "FailureMode" as failure_mode <<AnalyticalModels>> {
+  *mode_id : number <<PK>>
+  component_id : number <<FK>>
+  name : string
+  description : text
+  typical_indicators : string
+  typical_causes : string
+  severity_impact : string
+}
+
+entity "PredictionModel" as prediction_model <<AnalyticalModels>> {
+  *model_id : number <<PK>>
+  equipment_type : string
+  trained_date : date
+  version : string
+  accuracy_metrics : string
+  input_features : string
+  parameters : string
+}
+
+entity "ModelTrainingHistory" as model_training <<AnalyticalModels>> {
+  *training_id : number <<PK>>
+  model_id : number <<FK>>
+  date_time : datetime
+  dataset_used : string
+  parameters : string
+  performance_metrics : string
+}
+
+entity "Prediction" as prediction <<AnalyticalModels>> {
+  *prediction_id : number <<PK>>
+  model_id : number <<FK>>
+  equipment_id : number <<FK>>
+  date_generated : datetime
+  failure_mode : string
+  probability : number
+  predicted_timeframe : string
+  confidence_score : number
+}
+
+entity "AnomalyDetection" as anomaly_detection <<AnalyticalModels>> {
+  *anomaly_id : number <<PK>>
+  equipment_id : number <<FK>>
+  timestamp : datetime
+  type : string
+  severity : string
+  description : text
+  affected_sensors : string
+}
+
+entity "RemainingUsefulLife" as remaining_useful_life <<AnalyticalModels>> {
+  *rul_id : number <<PK>>
+  component_id : number <<FK>>
+  calculation_date : date
+  estimated_time : string
+  confidence_interval : string
+  methodology : string
+}
+
+' Operational Management
+entity "Alert" as alert <<OperationalManagement>> {
+  *alert_id : number <<PK>>
+  prediction_id : number <<FK>>
+  anomaly_id : number <<FK>>
+  type : string
+  severity : string
+  timestamp : datetime
+  description : text
+  status : string
+  resolution_notes : text
+}
+
+entity "MaintenanceTask" as maintenance_task <<OperationalManagement>> {
+  *task_id : number <<PK>>
+  equipment_id : number <<FK>>
+  alert_id : number <<FK>>
+  description : text
+  priority : string
+  status : string
+  scheduled_date : date
+  estimated_duration : number
+  assigned_to : number <<FK>>
+}
+
+entity "MaintenanceProcedure" as maintenance_procedure <<OperationalManagement>> {
+  *procedure_id : number <<PK>>
+  equipment_type : string
+  title : string
+  steps : text
+  required_tools : string
+  required_parts : string
+  safety_precautions : text
+}
+
+entity "SparePart" as spare_part <<OperationalManagement>> {
+  *part_id : number <<PK>>
+  name : string
+  compatible_equipment : string
+  stock_levels : number
+  supplier : string
+  cost : number
+  lead_time : string
+}
+
+entity "SensorThreshold" as sensor_threshold <<OperationalManagement>> {
+  *threshold_id : number <<PK>>
+  sensor_id : number <<FK>>
+  min_value : number
+  max_value : number
+  warning_levels : string
+  context_conditions : string
+}
+
+' Relationships (Core Entities)
+organization ||--o{ fleet : "has"
+organization ||--o{ user : "has"
+fleet ||--o{ vessel : "contains"
+vessel ||--o{ equipment : "has"
+equipment ||--o{ component : "contains"
+equipment ||--o{ sensor : "has"
+
+' Relationships (Operational Data)
+vessel ||--o{ voyage : "undertakes"
+equipment ||--o{ operational_state : "has"
+equipment ||--o{ maintenance_record : "has"
+component ||--o{ maintenance_record : "has"
+sensor ||--o{ sensor_reading : "produces"
+equipment ||--o{ failure_event : "experiences"
+component ||--o{ failure_event : "experiences"
+user ||--o{ maintenance_record : "creates"
+
+' Relationships (Analytical Models)
+component ||--o{ failure_mode : "has"
+prediction_model ||--o{ prediction : "generates"
+prediction_model ||--o{ model_training : "has"
+equipment ||--|| prediction : "has current"
+component ||--|| remaining_useful_life : "has"
+sensor_reading }|--o{ anomaly_detection : "used in"
+
+' Relationships (Operational Management)
+prediction ||--o{ alert : "triggers"
+anomaly_detection ||--o{ alert : "triggers"
+alert ||--o{ maintenance_task : "creates"
+maintenance_task ||--|| maintenance_record : "results in"
+equipment ||--o{ maintenance_task : "subject of"
+equipment ||--o{ maintenance_procedure : "has"
+maintenance_procedure }|--o{ spare_part : "requires"
+sensor ||--o{ sensor_threshold : "has"
+user ||--o{ maintenance_task : "assigned to"
+
+@enduml

@@ -1,0 +1,49 @@
+# PyCharm
+.idea/
+
+# Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+
+# Virtual environment folders
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Configuration files for Python projects
+*.coverage
+*.tox
+*.nox
+*.coverage.*
+*.hypothesis/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.hypothesis
+
+# LangChain specific
+langchain_cache/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# VS Code configuration
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
