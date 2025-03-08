@@ -60,6 +60,70 @@ class Component(db.Model):
     manufacturer = db.Column(db.String(100))
     serial_number = db.Column(db.String(100))
     installation_date = db.Column(db.Date)
+class ServiceDetails(db.Model):
+    __tablename__ = 'service_details'
+    service_id = db.Column(db.Integer, primary_key=True)
+    vessel_id = db.Column(db.Integer, db.ForeignKey('vessel.vessel_id'), nullable=False)
+    service_date = db.Column(db.Date)
+    service_type = db.Column(db.String(100))
+    details = db.Column(db.Text)
+
+class Voyage(db.Model):
+    __tablename__ = 'voyage'
+    voyage_id = db.Column(db.Integer, primary_key=True)
+    vessel_id = db.Column(db.Integer, db.ForeignKey('vessel.vessel_id'), nullable=False)
+    departure_port = db.Column(db.String(100))
+    arrival_port = db.Column(db.String(100))
+    departure_date = db.Column(db.Date)
+    arrival_date = db.Column(db.Date)
+    operational_details = db.relationship('OperationalDetails', backref='voyage', lazy=True)
+
+class OperationalDetails(db.Model):
+    __tablename__ = 'operational_details'
+    operation_id = db.Column(db.Integer, primary_key=True)
+    voyage_id = db.Column(db.Integer, db.ForeignKey('voyage.voyage_id'), nullable=False)
+    speed = db.Column(db.Numeric(10, 2))
+    fuel_consumption = db.Column(db.Numeric(10, 2))
+    weather_conditions = db.Column(db.String(255))
+
+class Sensor(db.Model):
+    __tablename__ = 'sensor'
+    sensor_id = db.Column(db.Integer, primary_key=True)
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.equipment_id'), nullable=False)
+    sensor_type = db.Column(db.String(100))
+    unit = db.Column(db.String(50))
+    sensor_readings = db.relationship('SensorReading', backref='sensor', lazy=True)
+
+class SensorReading(db.Model):
+    __tablename__ = 'sensor_reading'
+    reading_id = db.Column(db.Integer, primary_key=True)
+    sensor_id = db.Column(db.Integer, db.ForeignKey('sensor.sensor_id'), nullable=False)
+    timestamp = db.Column(db.DateTime)
+    value = db.Column(db.Numeric(10, 2))
+
+class FailureEvent(db.Model):
+    __tablename__ = 'failure_event'
+    event_id = db.Column(db.Integer, primary_key=True)
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.equipment_id'), nullable=False)
+    failure_mode = db.Column(db.String(100))
+    detected_date = db.Column(db.Date)
+    severity = db.Column(db.String(50))
+
+class PredictionModel(db.Model):
+    __tablename__ = 'prediction_model'
+    model_id = db.Column(db.Integer, primary_key=True)
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.equipment_id'), nullable=False)
+    model_name = db.Column(db.String(100))
+    model_version = db.Column(db.String(50))
+    last_trained_date = db.Column(db.Date)
+    remaining_useful_life = db.relationship('RemainingUsefulLife', backref='prediction_model', lazy=True)
+
+class RemainingUsefulLife(db.Model):
+    __tablename__ = 'remaining_useful_life'
+    rul_id = db.Column(db.Integer, primary_key=True)
+    model_id = db.Column(db.Integer, db.ForeignKey('prediction_model.model_id'), nullable=False)
+    predicted_rul_days = db.Column(db.Integer)
+    prediction_date = db.Column(db.Date)
 
 @app.route('/api/organization/<int:org_id>', methods=['GET'])
 def get_organization(org_id):
