@@ -6,7 +6,7 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://navexa_user:navexa_password@localhost/maritime_predictive_maintenance'
 db = SQLAlchemy(app)
 
-swagger = Swagger(app)  # Initialize Flasgger
+swagger = Swagger(app)
 
 # Database Models
 class Organization(db.Model):
@@ -124,6 +124,30 @@ class RemainingUsefulLife(db.Model):
     model_id = db.Column(db.Integer, db.ForeignKey('prediction_model.model_id'), nullable=False)
     predicted_rul_days = db.Column(db.Integer)
     prediction_date = db.Column(db.Date)
+
+@app.route('/api/organizations', methods=['GET'])
+def get_organizations():
+    """
+    Get a list of organization IDs and names.
+    ---
+    responses:
+      200:
+        description: A list of organization IDs and names.
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              organization_id:
+                type: integer
+              name:
+                type: string
+    """
+    organizations = Organization.query.all()
+
+    org_list = [{'organization_id': org.organization_id, 'name': org.name} for org in organizations]
+
+    return jsonify(org_list)
 
 @app.route('/api/organization/<int:org_id>', methods=['GET'])
 def get_organization(org_id):
