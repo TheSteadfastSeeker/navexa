@@ -1,7 +1,7 @@
 import os
 
 from langchain_community.docstore import InMemoryDocstore
-from langchain_community.vectorstores import Pinecone as LangChainPinecone
+from langchain_community.vectorstores import Pinecone as LangChainPinecone, PGVector
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone, ServerlessSpec
@@ -9,6 +9,7 @@ from tools.llm_configuration import DefaultLLMConfiguration as LLMConfiguration
 from langchain_community.vectorstores import FAISS
 import faiss
 configuration = LLMConfiguration()
+import psycopg2
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = "us-east-1"
@@ -86,5 +87,27 @@ class FAISSVectorStoreConfiguration(VectorStoreConfiguration):
         return vector_store
 
 
-class DefaultVectorStoreConfiguration(FAISSVectorStoreConfiguration):
-    pass;
+class PGVectorStoreConfiguration(VectorStoreConfiguration):
+    def __init__(self, connection_string=None):
+        self.connection_string = connection_string or f"postgresql://navexa_user:navexa_password@localhost:5432/maritime_predictive_maintenance"
+        self.indexes = {}
+
+    def get_vector_store_embedding_model(self) -> Embeddings:
+        return super().get_vector_store_embedding_model()
+
+    def get_indexes(self):
+        with psycopg2.connect(self.connection_string) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT name FROM public.langchain_pg_collection;")
+                collections = [row[0] for row in cursor.fetchall()]
+        return collections
+
+    def get_vector_store_handle(self, index_name: str) -> VectorStore:
+        vector_store = PGVector(
+            connection_string=self.connection_string,
+            embedding_function=self.get_vector_store_embedding_model(),
+            collection_name=index_name
+        )
+        return vector_store
+class DefaultVectorStoreConfiguration(PGVectorStoreConfiguration):
+    pass

@@ -15,7 +15,7 @@ class LLMConfiguration:
         pass
 
     def draw_graph(self, graph: CompiledGraph, filename_without_extension: str):
-        graph.get_graph().draw_png(f"misc/{filename_without_extension}.png")
+        graph.get_graph().draw_png(f"{filename_without_extension}.png")
 
 
 class GoogleLLMConfiguration(LLMConfiguration):

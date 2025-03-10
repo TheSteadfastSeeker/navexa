@@ -1,21 +1,23 @@
-import json
+from typing import List
+
 import requests
+from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import chain
+from langchain_core.tools import tool, Tool
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import chain
 from pydantic import BaseModel
-from tools.vector_db_configuration import FAISSVectorStoreConfiguration as VectorStoreConfiguration
+from tools.vector_db_configuration import DefaultVectorStoreConfiguration as VectorStoreConfiguration
 from tools.llm_configuration import GoogleLLMConfiguration as LLMConfiguration
-
 vector_store_config = VectorStoreConfiguration()
 configuration = LLMConfiguration()
 embeddings = configuration.get_embeddings()
 llm = configuration.get_llm()
 indexes = vector_store_config.get_indexes()
 
-#########
-# tools #
-#########
+###################
+# API INTEGRATION #
+###################
 def call_api_endpoint(endpoint: str, params: dict=None):
     url = f"http://127.0.0.1:5000/{endpoint}"
     response = requests.get(url, params=params)
@@ -25,8 +27,61 @@ def call_api_endpoint(endpoint: str, params: dict=None):
     else:
         return {"error": f"Failed to fetch data from {endpoint}, Status Code: {response.status_code}"}
 
-@chain
 def extract_organization_level_data(query: str):
+    """
+    This tool should be used whenever the query need the organization level information to answer the use query.
+    Following are the information that you can get.
+
+    Organization:
+    organization_id (integer)
+    name (string)
+    contact_info (string)
+    subscription_level (string)
+    type (string)
+    fleets (array of Fleet objects)
+
+    Fleet:
+    fleet_id (integer)
+    name (string)
+    description (string)
+    type (string)
+    vessels (array of Vessel objects)
+
+    Vessel:
+    vessel_id (integer)
+    name (string)
+    type (string)
+    build_year (integer)
+    classification (string)
+    dimensions (string)
+    gross_tonnage (string)
+    equipment (array of Equipment objects)
+
+    Equipment:
+    equipment_id (integer)
+    manual_ref (string)
+    manufacturer (string)
+    model (string)
+    specifications (string)
+    type (string)
+    installation_date (string)
+    components (array of Component objects)
+
+    Component:
+    component_id (integer)
+    name (string)
+    serial_number (string)
+    manufacturer (string)
+    installation_date (string)
+    type (string)
+
+    Relationships:
+    Organization contains an array of Fleet objects.
+    Fleet contains an array of Vessel objects.
+    Vessel contains an array of Equipment objects.
+    Equipment contains an array of Component objects.
+
+    """
     org_list: str = call_api_endpoint("api/organizations")
     class Organization(BaseModel):
         """Organization under consideration"""
@@ -62,11 +117,13 @@ def extract_organization_level_data(query: str):
     ])
     return org_details_prompt.pipe(llm).invoke({"context": org_details, "query": query})
 
-
-@chain
+######################
+# MANUAL INTEGRATION #
+######################
 def extract_from_manual(query: str) -> dict[str, str]():
-    """Extracts contents from User Manual based on specific keywords."""
-
+    """ User Manual has details about a specific equipment and components of machinery used in the industry.
+        You have access to User Manual Archives. You are able to answer your queries based on information available in the user manual.
+    """
     class Output(BaseModel):
         equipment_name: str
         keywords: str
@@ -92,12 +149,16 @@ def extract_from_manual(query: str) -> dict[str, str]():
     )
     llm_struct_output = configuration.get_llm().with_structured_output(Output)
     output: Output = (search_keywords_prompt | llm_struct_output).invoke({"equipments": indexes, "query": query})
-    context = vector_store_config.get_vector_store_handle(output.equipment_name).similarity_search(output.keywords, k=5)
+    context = "\n\n\n".join([doc.page_content for doc in vector_store_config.get_vector_store_handle(output.equipment_name).similarity_search(output.keywords, k=5)])
     return {"equipment_name": output.equipment_name, "context": context, "query": query}
 
-
-@chain
+#################
+# SUMMARIZATION #
+#################
 def summarize(params: dict[str, str]):
+    """Summarizes the answer in a form which is customer centric. This tools helps you to create a response which can be served to the user.
+       Call this tool only after you have all the information to answer the user query.
+    """
     summarizer_prompt = ChatPromptTemplate.from_messages(
         [
             ('system', """
@@ -125,38 +186,90 @@ def summarize(params: dict[str, str]):
     )
     return (summarizer_prompt | llm).invoke(params).content
 
-if __name__ == "__main__":
-    equips_str = extract_organization_level_data.invoke("""
-                                    Give me list of equipments in the Maritime as a json array of strings.
-                                    Always return a valid json response do not send back any extra texts.
-                                    
-                                    Example: 
-                                    Question: 
-                                        give me the list of fruits starting with letter 'a'. 
-                                    Answer: 
-                                        ["apple", "apricot", "apple lemon"]
-                                  """).content
-    equips:list[str] = json.loads(equips_str)
-    class Output(BaseModel):
-        name: str
-        manufacturer: str
-        model_number: str
-        characteristics: list[str]
-        servicing_details: str
+########################
+# multi-query rewrite  #
+########################
+class Step(BaseModel):
+    """Each Tool invocation Step"""
+    order: int
+    """order in which this step must be performed"""
+    tool: str
+    reason: str
 
-    for equip in equips:
-        equip_struct_llm = configuration.get_llm().with_structured_output(Output)
-        print(f"{equip}:\n",
-            extract_from_manual
-            .pipe(summarize)
-            .pipe(equip_struct_llm)
-            .invoke(f"""
-                        Need you to return me the name, model number, manufacturer and characteristics details these equipments: {equip}.
-                        Expected format
-                        {{
-                            "name": "laptop",
-                            "model_number": "MacBookPro",
-                            "manufacturer":"apple",
-                            "characteristics": ["service every 6 months, so that apple can make a lot of money."]
-                        }}
-                    """))
+class Workflow(BaseModel):
+    """Query and the list of steps to perform to answer the user query."""
+    query: str
+    steps: List[Step]
+
+tools = [
+    Tool(name="extract_organization_level_data", description="extract_organization_level_data", func=extract_organization_level_data),
+    Tool(name="extract_from_manual", description="extract_from_manual", func=extract_from_manual),
+    Tool(name="summarize", description="summarize", func=summarize),
+]
+
+def multi_query_rewrite(query: str) -> Workflow:
+    """Rewrites the user query"""
+    tool_bound_llm = configuration.get_llm()
+    tool_bound_llm = tool_bound_llm.bind_tools(tools)
+    tool_bound_llm = tool_bound_llm.with_structured_output(Workflow)
+
+    summarizer_prompt = ChatPromptTemplate.from_messages(
+        [
+            ('system', """
+                    You are a Technical Customer Service Executive who is able to split the user query into logical  steps to answer the question based on following rules.
+                    you have the following tools at your disposal {tools}. Following are the rules:
+                    
+                    - If there is a extract_organization_level_data step it should be the first one in the list.
+                    - If there is a extract_from_manual step, it will come first if no extract_organization_level_data, otherwise after extract_organization_level_data.
+                    - The summarize step is always the last step.
+                    
+                    If the question outside this given context or if you are not sure of the answer, directly call the summarize step.
+                    
+                    Answer should be in json format. Following is an example of the output:
+                    
+                    Question 1.:
+                    I want to get the name, model number and manufacturer of all the equipments of Company Cochin Shipping Inc.
+                    
+                    Answer:
+                    {{
+                        "query": "I want to get the name, model number and manufacturer of all the equipments of Company Cochin Shipping Inc."
+                        "steps": [
+                            {{
+                                "step": "extract_organization_level_data",
+                                "reason": "first have to call the organization level data to get the organization and the list of equipments.
+                            }},
+                            {{
+                                "step": "extract_from_manual",
+                                "reason": "now that I have the equipments I have to extract the information from the manuals.
+                            }},
+                            {{
+                                "step": "summarize",
+                                "reason": "now I have to summarize the information.
+                            }}
+                        ]
+                    }} 
+                    
+                    
+                    
+                    Question 2.:
+                    I want to get the description of CAT C-32
+                    
+                    Answer:
+                    {{
+                        "query": "I want to get the name, model number and manufacturer of all the equipments of Company Cochin Shipping Inc."
+                        "steps": [
+                            {{
+                                "tool": "extract_from_manual",
+                                "reason": "This question is equipment specific and has nothing to do with Organization. 
+                            }},
+                            {{
+                                "tool": "summarize",
+                                "reason": "now I have to summarize the information.
+                            }}
+                        ]
+                    }} 
+                    """),
+            ('human', "Please answer my query {query}")
+        ]
+    )
+    return (summarizer_prompt | tool_bound_llm).invoke({"query": query, "tools": tools})
