@@ -1,9 +1,7 @@
 from typing import List
 
 import requests
-from langchain_core.language_models import BaseChatModel
-from langchain_core.runnables import chain
-from langchain_core.tools import tool, Tool
+from langchain_core.tools import Tool
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
@@ -18,8 +16,8 @@ indexes = vector_store_config.get_indexes()
 ###################
 # API INTEGRATION #
 ###################
-def call_api_endpoint(endpoint: str, params: dict=None):
-    url = f"http://127.0.0.1:5000/{endpoint}"
+def call_api_endpoint(endpoint: str, params: dict=None, host="http://127.0.0.1:5000/"):
+    url = f"{host}/{endpoint}"
     response = requests.get(url, params=params)
 
     if response.status_code == 200:

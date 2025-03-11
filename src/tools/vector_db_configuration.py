@@ -1,18 +1,14 @@
 import os
 
 from langchain_community.docstore import InMemoryDocstore
-from langchain_community.vectorstores import Pinecone as LangChainPinecone, PGVector
+from langchain_community.vectorstores import PGVector
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
-from pinecone import Pinecone, ServerlessSpec
 from tools.llm_configuration import DefaultLLMConfiguration as LLMConfiguration
 from langchain_community.vectorstores import FAISS
 import faiss
 configuration = LLMConfiguration()
 import psycopg2
-
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_ENVIRONMENT = "us-east-1"
 
 class VectorStoreConfiguration:
     def get_vector_store_embedding_model(self) -> Embeddings:
@@ -24,39 +20,8 @@ class VectorStoreConfiguration:
     def get_vector_store_handle(self, index_name: str) -> VectorStore:
         pass
 
-class PineconeVectorStoreConfiguration(VectorStoreConfiguration):
-    def __init__(self):
-        self.pc = Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENVIRONMENT)
-
-    def get_vector_store_embedding_model(self) -> Embeddings:
-        return super().get_vector_store_embedding_model()
-
-    def get_indexes(self):
-        return self.pc.list_indexes()
-
-    def get_vector_store_handle(self, index_name: str) -> VectorStore:
-        if index_name not in [index_info["name"] for index_info in self.pc.list_indexes()]:
-            print(f"Index '{index_name}' not found. Creating a new index...")
-            self.pc.create_index(
-                name=index_name,
-                spec=ServerlessSpec(
-                    cloud="aws",
-                    region=PINECONE_ENVIRONMENT
-                ),
-                dimension=768,
-                metric="cosine"
-            )
-
-        index = self.pc.Index(name=index_name)
-        vector_store = LangChainPinecone(
-            index=index,
-            embedding=self.get_vector_store_embedding_model(),
-            text_key="text"
-        )
-        return vector_store
-
-
 class FAISSVectorStoreConfiguration(VectorStoreConfiguration):
+    """Use this for speed and small data."""
     def __init__(self):
         self.index = None
         self.texts = []
@@ -88,6 +53,7 @@ class FAISSVectorStoreConfiguration(VectorStoreConfiguration):
 
 
 class PGVectorStoreConfiguration(VectorStoreConfiguration):
+    """Use this for persistent storage"""
     def __init__(self, connection_string=None):
         self.connection_string = connection_string or f"postgresql://navexa_user:navexa_password@localhost:5432/maritime_predictive_maintenance"
         self.indexes = {}

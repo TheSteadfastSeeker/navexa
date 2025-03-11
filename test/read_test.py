@@ -59,19 +59,38 @@ class Test(unittest.TestCase):
                                             ["apple", "apricot", "apple lemon"]
                                       """).content
         equips:list[str] = json.loads(equips_str)
+        assert len(equips) == 6
+
         for equip in equips:
             equip_struct_llm = configuration.get_llm().with_structured_output(Output)
             query = f"""
                             Need you to return me the name, model number, manufacturer and characteristics details this equipment: {equip}.
-                            Expected format
+                            Expected format is similar to following.
                             {{
                                 "name": "laptop",
                                 "model_number": "MacBookPro",
                                 "manufacturer":"apple",
                                 "characteristics": ["service every 6 months, so that apple can make a lot of money."]
                             }}
+                            
+                            Note: These are some of the manufacturers that I know of. 
+                                  If the name starts with one from this list use the following name instead. 
+                                - 'Wärtsilä'
+                                - 'Caterpillar'
+                                - 'Alfa Laval'
+                                - 'MAN B&W'
+                                - 'Framo'
+                            
                     """
             summary = summarize(extract_from_manual(query))
             output: Output = equip_struct_llm.invoke(summary)
             print(f"{equip}:\n", output)
-
+            self.assertIn(
+                output.manufacturer, [
+                    "Wärtsilä",
+                    "Caterpillar",
+                    "Alfa Laval",
+                    "MAN B&W",
+                    "Framo"
+                ]
+            )
