@@ -26,59 +26,11 @@ def call_api_endpoint(endpoint: str, params: dict=None, host="http://127.0.0.1:5
         return {"error": f"Failed to fetch data from {endpoint}, Status Code: {response.status_code}"}
 
 def extract_organization_level_data(query: str):
+
     """
     This tool should be used whenever the query need the organization level information to answer the use query.
-    Following are the information that you can get.
-
-    Organization:
-    organization_id (integer)
-    name (string)
-    contact_info (string)
-    subscription_level (string)
-    type (string)
-    fleets (array of Fleet objects)
-
-    Fleet:
-    fleet_id (integer)
-    name (string)
-    description (string)
-    type (string)
-    vessels (array of Vessel objects)
-
-    Vessel:
-    vessel_id (integer)
-    name (string)
-    type (string)
-    build_year (integer)
-    classification (string)
-    dimensions (string)
-    gross_tonnage (string)
-    equipment (array of Equipment objects)
-
-    Equipment:
-    equipment_id (integer)
-    manual_ref (string)
-    manufacturer (string)
-    model (string)
-    specifications (string)
-    type (string)
-    installation_date (string)
-    components (array of Component objects)
-
-    Component:
-    component_id (integer)
-    name (string)
-    serial_number (string)
-    manufacturer (string)
-    installation_date (string)
-    type (string)
-
-    Relationships:
-    Organization contains an array of Fleet objects.
-    Fleet contains an array of Vessel objects.
-    Vessel contains an array of Equipment objects.
-    Equipment contains an array of Component objects.
-
+    The API schema is dynamically fetched from http://localhost:5000/apispec_1.json.
+    Instead of manually defining the schema, we use the OpenAPI spec to understand available fields.
     """
     org_list: str = call_api_endpoint("api/organizations")
     class Organization(BaseModel):
