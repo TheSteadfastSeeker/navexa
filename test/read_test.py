@@ -2,7 +2,7 @@ import json
 
 import unittest
 
-from read import extract_organization_level_data, extract_from_manual, summarize, multi_query_rewrite
+from utility import extract_organization_level_data, extract_from_manual, summarize, multi_query_rewrite
 from tools.llm_configuration import GoogleLLMConfiguration as Configuration
 from pydantic import BaseModel
 
@@ -74,7 +74,7 @@ class Test(unittest.TestCase):
                             }}
                             
                             Note: These are some of the manufacturers that I know of. 
-                                  If the name starts with one from this list use the following name instead. 
+                                  If the name is kind of from following list use the name from the list instead. 
                                 - 'Wärtsilä'
                                 - 'Caterpillar'
                                 - 'Alfa Laval'

@@ -115,9 +115,9 @@ def extract_organization_level_data(query: str):
     ])
     return org_details_prompt.pipe(llm).invoke({"context": org_details, "query": query})
 
-######################
-# MANUAL INTEGRATION #
-######################
+###########################
+# USER MANUAL INTEGRATION #
+###########################
 def extract_from_manual(query: str) -> dict[str, str]():
     """ User Manual has details about a specific equipment and components of machinery used in the industry.
         You have access to User Manual Archives. You are able to answer your queries based on information available in the user manual.
