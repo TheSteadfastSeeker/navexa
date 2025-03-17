@@ -486,7 +486,7 @@ def get_operational_data(vessel_id):
         'voyage_id': v.voyage_id,
         'start_date': str(v.start_date),
         'end_date': str(v.end_date),
-        'route': v.route,
+        'route': v.perform_route,
         'cargo_type': v.cargo_type,
         'operating_conditions': v.operating_conditions,
         'weather_data': v.weather_data

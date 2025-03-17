@@ -1,7 +1,8 @@
 from typing import List
 
 import requests
-from langchain_core.tools import Tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor, AgentType
+from langchain_core.tools import Tool, tool
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
@@ -12,6 +13,8 @@ configuration = LLMConfiguration()
 embeddings = configuration.get_embeddings()
 llm = configuration.get_llm()
 indexes = vector_store_config.get_indexes()
+from state import WorkflowState, Steps
+
 
 ###################
 # API INTEGRATION #
@@ -25,12 +28,12 @@ def call_api_endpoint(endpoint: str, params: dict=None, host="http://127.0.0.1:5
     else:
         return {"error": f"Failed to fetch data from {endpoint}, Status Code: {response.status_code}"}
 
+@tool
 def extract_organization_level_data(query: str):
 
     """
     This tool should be used whenever the query need the organization level information to answer the use query.
-    The API schema is dynamically fetched from http://localhost:5000/apispec_1.json.
-    Instead of manually defining the schema, we use the OpenAPI spec to understand available fields.
+    To invoke this tool the query must contain the name of the organization for which the data must be extracted.
     """
     org_list: str = call_api_endpoint("api/organizations")
     class Organization(BaseModel):
@@ -70,9 +73,10 @@ def extract_organization_level_data(query: str):
 ###########################
 # USER MANUAL INTEGRATION #
 ###########################
+@tool
 def extract_from_manual(query: str) -> dict[str, str]():
     """ User Manual has details about a specific equipment and components of machinery used in the industry.
-        You have access to User Manual Archives. You are able to answer your queries based on information available in the user manual.
+        To invoke this tool the query parameter must contain the names of the equipment or component for which the data is to be extracted from the user manual.
     """
     class Output(BaseModel):
         equipment_name: str
@@ -98,16 +102,19 @@ def extract_from_manual(query: str) -> dict[str, str]():
         ]
     )
     llm_struct_output = configuration.get_llm().with_structured_output(Output)
+    print(f"searching in {indexes} \n query: {query}")
     output: Output = (search_keywords_prompt | llm_struct_output).invoke({"equipments": indexes, "query": query})
+    print(f"Found.. {output}")
     context = "\n\n\n".join([doc.page_content for doc in vector_store_config.get_vector_store_handle(output.equipment_name).similarity_search(output.keywords, k=5)])
     return {"equipment_name": output.equipment_name, "context": context, "query": query}
 
 #################
 # SUMMARIZATION #
 #################
+@tool
 def summarize(params: dict[str, str]):
-    """Summarizes the answer in a form which is customer centric. This tools helps you to create a response which can be served to the user.
-       Call this tool only after you have all the information to answer the user query.
+    """Summarizes the answer in a form which is customer-centric. This tools helps you to create a response which can be served to the user.
+       This is the last step.
     """
     summarizer_prompt = ChatPromptTemplate.from_messages(
         [
@@ -136,43 +143,25 @@ def summarize(params: dict[str, str]):
     )
     return (summarizer_prompt | llm).invoke(params).content
 
+tools = [
+   extract_organization_level_data, extract_from_manual, summarize
+]
+
 ########################
 # multi-query rewrite  #
 ########################
-class Step(BaseModel):
-    """Each Tool invocation Step"""
-    order: int
-    """order in which this step must be performed"""
-    tool: str
-    reason: str
-
-class Workflow(BaseModel):
-    """Query and the list of steps to perform to answer the user query."""
-    query: str
-    steps: List[Step]
-
-tools = [
-    Tool(name="extract_organization_level_data", description="extract_organization_level_data", func=extract_organization_level_data),
-    Tool(name="extract_from_manual", description="extract_from_manual", func=extract_from_manual),
-    Tool(name="summarize", description="summarize", func=summarize),
-]
-
-def multi_query_rewrite(query: str) -> Workflow:
+def multi_query_rewrite(state: WorkflowState):
     """Rewrites the user query"""
     tool_bound_llm = configuration.get_llm()
     tool_bound_llm = tool_bound_llm.bind_tools(tools)
-    tool_bound_llm = tool_bound_llm.with_structured_output(Workflow)
+    tool_bound_llm = tool_bound_llm.with_structured_output(Steps)
 
     summarizer_prompt = ChatPromptTemplate.from_messages(
         [
             ('system', """
                     You are a Technical Customer Service Executive who is able to split the user query into logical  steps to answer the question based on following rules.
-                    you have the following tools at your disposal {tools}. Following are the rules:
-                    
-                    - If there is a extract_organization_level_data step it should be the first one in the list.
-                    - If there is a extract_from_manual step, it will come first if no extract_organization_level_data, otherwise after extract_organization_level_data.
-                    - The summarize step is always the last step.
-                    
+                    you have the following tools at your disposal {tools}. 
+                                      
                     If the question outside this given context or if you are not sure of the answer, directly call the summarize step.
                     
                     Answer should be in json format. Following is an example of the output:
@@ -219,7 +208,37 @@ def multi_query_rewrite(query: str) -> Workflow:
                         ]
                     }} 
                     """),
-            ('human', "Please answer my query {query}")
+            ('human', "Please answer my query {user_query}")
         ]
     )
-    return (summarizer_prompt | tool_bound_llm).invoke({"query": query, "tools": tools})
+    return {"steps": (summarizer_prompt | tool_bound_llm).invoke({"tools": tools, **state}).steps}
+
+#################
+# EXECUTE_TOOLS #
+#################
+def execute_tool(state: WorkflowState):
+    prompt = ChatPromptTemplate.from_messages([
+        ('system', 'You are a smart agent who can execute one of the following tools: tools: {tools}'),
+        ("placeholder", "{chat_history}"),
+        ('human',"""
+                    Please perform the tool invocation based on context and tasks to perform:   
+                    
+                    context: 
+                    {context}
+                    
+                    details of task to perform: 
+                    {steps}
+                    
+                    finally return the result without tags such as ```json or ```.
+                """),
+        ("placeholder", "{agent_scratchpad}"),
+    ])
+    agent = create_tool_calling_agent(llm=llm,tools=tools,prompt=prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+    steps = state["steps"][state.get("current_step", 0)]
+    context = state.get("output", "")
+    print(f"executing Steps: {steps} with Context:{context}")
+    result = agent_executor.invoke({"tools": tools, "steps": steps, "context": context})
+    print(result)
+    return result
+

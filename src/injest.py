@@ -1,10 +1,20 @@
 import os
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from tools.vector_db_configuration import DefaultVectorStoreConfiguration as VectorStoreConfiguration
-from tools.llm_configuration import GoogleLLMConfiguration as LLMConfiguration
+
 vector_store_config = VectorStoreConfiguration()
+
+def extract_text_from_pdf(file_path: str) -> str:
+    """
+    Extract text from a PDF file.
+    """
+    with open(file_path, 'rb') as f:
+        reader = PdfReader(f)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+    return text
 
 
 class PDFIngestion:
@@ -23,7 +33,7 @@ class PDFIngestion:
                 save_name = filename[0: -4].lower()
                 file_path = os.path.join(self.folder_path, filename)
                 print(f"Ingesting PDF file: {filename}")
-                text = self.extract_text_from_pdf(file_path)
+                text = extract_text_from_pdf(file_path)
                 vector_store = that_vector_store_config.get_vector_store_handle(save_name)
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1000,
@@ -35,16 +45,6 @@ class PDFIngestion:
                 vector_store.add_documents(docs)
                 print(f"Successfully ingested '{filename}' into the index.")
 
-    def extract_text_from_pdf(self, file_path: str) -> str:
-        """
-        Extract text from a PDF file.
-        """
-        with open(file_path, 'rb') as f:
-            reader = PdfReader(f)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text()
-        return text
 
 if __name__ == "__main__":
     pdf_folder = "../docs/manuals/equipment"
