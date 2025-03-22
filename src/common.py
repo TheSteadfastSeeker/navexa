@@ -7,7 +7,11 @@ class Step(BaseModel):
     order: int
     """order in which this step must be performed"""
     tool: str
-    reason: str
+    reason_it_was_chosen: str
+
+class Output(BaseModel):
+        equipment_name: str
+        keywords: str
 
 class Steps(BaseModel):
     """Steps"""
@@ -15,6 +19,6 @@ class Steps(BaseModel):
 
 class WorkflowState(TypedDict):
     output: str
-    user_query: str
+    query: str
     current_step: int
     steps: Annotated[List[Step], operator.add]

@@ -1,7 +1,7 @@
 import os
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from tools.vector_db_configuration import DefaultVectorStoreConfiguration as VectorStoreConfiguration
+from utils.vector_db_configuration import DefaultVectorStoreConfiguration as VectorStoreConfiguration
 
 vector_store_config = VectorStoreConfiguration()
 

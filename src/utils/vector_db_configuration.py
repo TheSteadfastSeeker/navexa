@@ -1,14 +1,13 @@
-import os
-
+import faiss
+import psycopg2
 from langchain_community.docstore import InMemoryDocstore
 from langchain_community.vectorstores import PGVector
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
-from tools.llm_configuration import DefaultLLMConfiguration as LLMConfiguration
+from utils.llm_configuration import DefaultLLMConfiguration as LLMConfiguration
 from langchain_community.vectorstores import FAISS
-import faiss
+
 configuration = LLMConfiguration()
-import psycopg2
 
 class VectorStoreConfiguration:
     def get_vector_store_embedding_model(self) -> Embeddings:

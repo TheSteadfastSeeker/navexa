@@ -1,12 +1,12 @@
-from typing import TypedDict, Union, Literal
 from langgraph.constants import END
-from langgraph.graph import MessageGraph, StateGraph
+from langgraph.graph import StateGraph
 from langgraph.graph.graph import CompiledGraph
 
-from state import WorkflowState
-from tools.vector_db_configuration import DefaultVectorStoreConfiguration as VectorStoreConfiguration
-from tools.llm_configuration import GoogleLLMConfiguration as LLMConfiguration
-from utility import multi_query_rewrite, execute_tool
+from common import WorkflowState
+from tools.executor import execute_tool
+from tools.query_rewrite import multi_query_rewrite
+from utils.vector_db_configuration import DefaultVectorStoreConfiguration as VectorStoreConfiguration
+from utils.llm_configuration import GoogleLLMConfiguration as LLMConfiguration
 
 vector_store_config = VectorStoreConfiguration()
 configuration = LLMConfiguration()
@@ -16,17 +16,8 @@ indexes = vector_store_config.get_indexes()
 
 PNG_GRAPH = "output"
 DECIPHER: str = "__decipher__"
-DECIDE: str = "__decide__"
-ROUTER: str = "__router__"
 EXECUTE_STEP: str = "__execute_step__"
-API_CALL: str = "__api_call__"
-STEP_COUNTER: str = "__step_counter__"
-REFER_MANUAL = "__refer_manual__"
-CAN_PERFORM_SUMMARIZATION: str = "__can_perform_summarization__"
-PERFORM_SUMMARIZATION: str = "__perform_summarization__"
 SEND_ALERT: str = "__send_alert__"
-DECIDER_RET = Union[API_CALL, REFER_MANUAL, SEND_ALERT, CAN_PERFORM_SUMMARIZATION]
-CAN_PERFORM_SUMMARIZATION_RET = Union[PERFORM_SUMMARIZATION, DECIDE]
 
 def execute_step(state: WorkflowState):
     current_step = state.get("current_step", -1) + 1
@@ -34,7 +25,7 @@ def execute_step(state: WorkflowState):
     return {"current_step": current_step, "output": execution_result}
 
 def perform_route(state: WorkflowState) -> str:
-    if state["current_step"] < len(state["steps"]):
+    if state["current_step"] < len(state["steps"])-1:
         return EXECUTE_STEP
     else:
         return END
@@ -55,11 +46,5 @@ class Workflow:
 
 if __name__ == "__main__":
     workflow: CompiledGraph = Workflow().create_graph()
-    print(workflow.invoke({"user_query": "Give me all the list of equipments and it's 2 unique characteristics for Maritime"}))
-
-    # while query != "exit":
-    #     if query != "":
-    #         for step in workflow.stream({"query": query}):
-    #             print(step)
-    #     query = input("Enter your query: ")
-    # print("Thanks.")
+    for c in workflow.invoke({"query": "Give me all the list of equipments and then from the user manual give me 2 characteristics for Maritime"}):
+        print(c)

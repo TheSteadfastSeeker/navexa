@@ -2,9 +2,14 @@ import json
 
 import unittest
 
-from utility import extract_organization_level_data, extract_from_manual, summarize, multi_query_rewrite
-from tools.llm_configuration import GoogleLLMConfiguration as Configuration
+from langgraph.graph.graph import CompiledGraph
+
+from tools import summarize, extract_from_manual, extract_organization_level_data
+from tools.query_rewrite import multi_query_rewrite
+from utils.llm_configuration import GoogleLLMConfiguration as Configuration
 from pydantic import BaseModel
+
+from workflow import Workflow
 
 configuration = Configuration()
 llm = configuration.get_llm()
@@ -17,35 +22,40 @@ class Output(BaseModel):
 
 class Test(unittest.TestCase):
     def test_scenario_1(self):
-        workflow = multi_query_rewrite("Give me all the list of equipments and it's 2 unique characteristics for Maritime")
+        workflow = multi_query_rewrite(
+            {"query": "Give me all the list of equipments and it's 2 unique characteristics for Maritime"})
         print(workflow)
-        for step in workflow.steps:
+        for step in workflow["steps"]:
             print(step.order)
             print(step.tool)
-            print(step.reason)
-        self.assertEquals(workflow.steps[0].tool, "extract_organization_level_data")
-        self.assertEquals(workflow.steps[1].tool, "extract_from_manual")
-        self.assertEquals(workflow.steps[2].tool, "summarize")
+            print(step.reason_it_was_chosen)
+        self.assertEquals(workflow["steps"][0].tool, "extract_organization_level_data")
+        self.assertEquals(workflow["steps"][1].tool, "extract_from_manual")
+        self.assertEquals(workflow["steps"][2].tool, "summarize")
 
     def test_scenario_2(self):
-        workflow = multi_query_rewrite("What is the weight of CAT-032?")
-        print(workflow.query)
-        for step in workflow.steps:
+        workflow = multi_query_rewrite({"query": "What is the weight of CAT-032?"})
+        print(workflow)
+        for step in workflow["steps"]:
             print(step.order)
             print(step.tool)
-            print(step.reason)
-        self.assertEquals(workflow.steps[0].tool, "extract_from_manual")
-        self.assertEquals(workflow.steps[1].tool, "summarize")
+            print(step.reason_it_was_chosen)
+        self.assertEquals(workflow["steps"][0].tool, "extract_from_manual")
+        self.assertEquals(workflow["steps"][1].tool, "summarize")
 
     def test_scenario_3(self):
-        workflow = multi_query_rewrite("Tell me a story of a camel and it's owner.")
-        print(workflow.query)
-        for step in workflow.steps:
+        workflow = multi_query_rewrite({"query": "Tell me a story of a camel and it's owner."})
+        print(workflow)
+        for step in workflow["steps"]:
             print(step.order)
             print(step.tool)
-            print(step.reason)
-            self.assertNotIn(step.tool, ['extract_organization_level_data', 'extract_from_manual'])
+            print(step.reason_it_was_chosen)
+        self.assertEquals(workflow["steps"][0].tool, "summarize")
 
+    def test_workflow(self):
+        workflow: CompiledGraph = Workflow().create_graph()
+        for c in workflow.invoke({"query": "Give me all the list of equipments and then from the user manual give me 2 characteristics for Maritime"}):
+            print(c)
 
     def test_scenario_10(self):
         equips_str = extract_organization_level_data("""
@@ -82,9 +92,9 @@ class Test(unittest.TestCase):
                                 - 'Framo'
                             
                     """
-            summary = summarize(extract_from_manual(query))
+            manual = extract_from_manual(query)
+            summary = summarize(manual)
             output: Output = equip_struct_llm.invoke(summary)
-            print(f"{equip}:\n", output)
             self.assertIn(
                 output.manufacturer, [
                     "Wärtsilä",
@@ -94,3 +104,6 @@ class Test(unittest.TestCase):
                     "Framo"
                 ]
             )
+
+if __name__ == '__main__':
+    unittest.main()
